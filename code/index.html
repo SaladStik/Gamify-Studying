@@ -1,0 +1,339 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Studying Gamified</title>
+    <style>
+      body {
+        background-color: #121212;
+        color: #ffffff;
+        font-family: Arial, sans-serif;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        height: 100vh;
+        margin: 0;
+        overflow: hidden;
+      }
+
+      #githubSignIn {
+        position: absolute;
+        top: 20px;
+        right: 20px;
+        padding: 10px 15px;
+        background-color: #333333;
+        border: none;
+        border-radius: 5px;
+        color: #ffffff;
+        font-size: 14px;
+        cursor: pointer;
+      }
+
+      #githubSignIn:hover {
+        background-color: #4caf50;
+      }
+
+      h1 {
+        margin: 10px 0 20px;
+        font-size: 2rem;
+      }
+
+      label,
+      select,
+      button {
+        margin: 10px 0;
+      }
+
+      select,
+      button {
+        padding: 10px;
+        border: none;
+        border-radius: 5px;
+        background-color: #1f1f1f;
+        color: #ffffff;
+      }
+
+      button:hover {
+        background-color: #333333;
+      }
+
+      #controls {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 10px;
+      }
+
+      #xpContainer {
+        margin: 20px 0;
+        text-align: center;
+      }
+
+      #xpBarContainer {
+        width: 90%;
+        background-color: #333333;
+        border-radius: 5px;
+        overflow: hidden;
+        margin: 10px auto;
+      }
+
+      #xpBar {
+        height: 30px;
+        background-color: #4caf50;
+        width: 0%;
+        transition: width 0.5s;
+      }
+
+      #grantXpModal,
+      #confettiModal {
+        display: none;
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background: rgba(0, 0, 0, 0.8);
+        justify-content: center;
+        align-items: center;
+        z-index: 10;
+      }
+
+      #grantXpModalContent {
+        background-color: #1f1f1f;
+        padding: 20px;
+        border-radius: 10px;
+        text-align: center;
+      }
+
+      #confettiModal span {
+        font-size: 3rem;
+        color: #f39c12;
+        animation: confetti 1s ease-out forwards;
+      }
+
+      footer {
+        width: 100%;
+        text-align: center;
+        padding: 10px;
+        background-color: #1f1f1f;
+        color: #ffffff;
+        position: fixed;
+        bottom: 0;
+      }
+
+      footer a {
+        color: #4caf50;
+        text-decoration: none;
+      }
+
+      footer a:hover {
+        text-decoration: underline;
+      }
+
+      @keyframes confetti {
+        0% {
+          opacity: 1;
+          transform: translateY(0) rotate(0deg);
+        }
+        100% {
+          opacity: 0;
+          transform: translateY(-100px) rotate(720deg);
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <button id="githubSignIn" onclick="signInWithGitHub()">
+      Sign in with GitHub
+    </button>
+
+    <h1>Studying Gamified</h1>
+
+    <div id="controls">
+      <label for="timeSelect">Select Time:</label>
+      <select id="timeSelect">
+        <option value="150">2.5 minutes</option>
+        <option value="300">5 minutes</option>
+        <option value="450">7.5 minutes</option>
+        <option value="600">10 minutes</option>
+        <option value="750">12.5 minutes</option>
+        <option value="900">15 minutes</option>
+        <option value="1200">20 minutes</option>
+        <option value="1500">25 minutes</option>
+        <option value="1800">30 minutes</option>
+        <option value="2100">35 minutes</option>
+        <option value="2400">40 minutes</option>
+        <option value="2700">45 minutes</option>
+        <option value="3000">50 minutes</option>
+        <option value="3300">55 minutes</option>
+        <option value="3600">60 minutes</option>
+      </select>
+      <button onclick="startTimer()">Start Timer</button>
+      <button onclick="openGrantXpModal()">Didn’t Get XP?</button>
+    </div>
+
+    <div id="grantXpModal">
+      <div id="grantXpModalContent">
+        <p>Select the missed study time:</p>
+        <select id="grantXpTimeSelect">
+          <option value="150">2.5 minutes</option>
+          <option value="300">5 minutes</option>
+          <option value="450">7.5 minutes</option>
+          <option value="600">10 minutes</option>
+          <option value="750">12.5 minutes</option>
+          <option value="900">15 minutes</option>
+          <option value="1200">20 minutes</option>
+          <option value="1500">25 minutes</option>
+          <option value="1800">30 minutes</option>
+        </select>
+        <br /><br />
+        <button onclick="grantMissedXp()">Grant XP</button>
+        <button onclick="closeGrantXpModal()">Cancel</button>
+      </div>
+    </div>
+
+    <div id="studyConfirmationModal" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0, 0, 0, 0.8); justify-content: center; align-items: center; z-index: 10;">
+        <div style="background-color: #1f1f1f; padding: 20px; border-radius: 10px; text-align: center;">
+          <p>Did you study during the full timer?</p>
+          <button onclick="confirmStudy(true)">Yes</button>
+          <button onclick="confirmStudy(false)">No</button>
+        </div>
+      </div>
+
+    <div id="confettiModal">
+      <div
+        style="
+          display: flex;
+          justify-content: center;
+          align-items: center;
+          height: 100%;
+        "
+      >
+        <span>🎉</span>
+      </div>
+    </div>
+
+    <h2 id="countdown">00:00</h2>
+
+    <div id="xpContainer">
+      <h2>XP Progress</h2>
+      <div id="xpBarContainer">
+        <div id="xpBar"></div>
+      </div>
+      <p id="xpText">XP: 0 / 100</p>
+      <p id="levelText">Level: 1</p>
+    </div>
+
+    <footer>
+      <p>
+        Follow my
+        <a href="https://github.com/SaladStik" target="_blank">GitHub</a>
+      </p>
+    </footer>
+
+    <audio id="completionSound" src="./clock-ticking-83775.mp3"></audio>
+
+    <script>
+      let xp = 0;
+      let level = 1;
+      const xpPerLevel = 100;
+      const xpPerSecond = 0.1667;
+      let interval;
+
+      function playCompletionSound() {
+        const completionSound = document.getElementById("completionSound");
+        completionSound.play();
+      }
+
+      function showConfetti() {
+        const confettiModal = document.getElementById("confettiModal");
+        confettiModal.style.display = "flex";
+        setTimeout(() => {
+          confettiModal.style.display = "none";
+        }, 500);
+      }
+
+      function animateXPBar(gainedXP) {
+        const xpBar = document.getElementById("xpBar");
+        const xpText = document.getElementById("xpText");
+        const levelText = document.getElementById("levelText");
+
+        const interval = setInterval(() => {
+          if (gainedXP > 0) {
+            xp++;
+            if (xp >= xpPerLevel) {
+              xp -= xpPerLevel;
+              level++;
+              showConfetti();
+            }
+            xpBar.style.width = `${(xp / xpPerLevel) * 100}%`;
+            xpText.textContent = `XP: ${Math.floor(xp)} / ${xpPerLevel}`;
+            levelText.textContent = `Level: ${level}`;
+            gainedXP--;
+          } else {
+            clearInterval(interval);
+          }
+        }, 50);
+      }
+
+      function startTimer() {
+        const timeSelect = document.getElementById("timeSelect");
+        const countdown = document.getElementById("countdown");
+        let time = parseInt(timeSelect.value);
+
+        clearInterval(interval);
+
+        interval = setInterval(() => {
+            const minutes = Math.floor(time / 60);
+            const seconds = time % 60;
+            countdown.textContent = `${minutes}m ${seconds}s`;
+
+            if (time <= 0) {
+            clearInterval(interval);
+            countdown.textContent = "Time's up!";
+            playCompletionSound();
+            openStudyConfirmationModal();
+            }
+            time--;
+        }, 1000);
+        }
+
+        function openStudyConfirmationModal() {
+        document.getElementById("studyConfirmationModal").style.display = "flex";
+        }
+
+        function closeStudyConfirmationModal() {
+        document.getElementById("studyConfirmationModal").style.display = "none";
+        }
+
+        function confirmStudy(didStudy) {
+        closeStudyConfirmationModal();
+        if (didStudy) {
+            const timeSelect = document.getElementById("timeSelect");
+            const totalSessionTime = parseInt(timeSelect.value);
+            const gainedXP = totalSessionTime * xpPerSecond;
+            animateXPBar(gainedXP);
+        }
+        }
+
+      function openGrantXpModal() {
+        document.getElementById("grantXpModal").style.display = "flex";
+      }
+
+      function closeGrantXpModal() {
+        document.getElementById("grantXpModal").style.display = "none";
+      }
+
+      function grantMissedXp() {
+        const timeSelect = document.getElementById("grantXpTimeSelect");
+        const missedTime = parseInt(timeSelect.value);
+        const gainedXP = missedTime * xpPerSecond;
+
+        animateXPBar(gainedXP);
+        closeGrantXpModal();
+      }
+    </script>
+  </body>
+</html>
