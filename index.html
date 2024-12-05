@@ -307,6 +307,27 @@
       }, 5000);
     }
 
+
+    async function getAccessTokenFromCode(code) {
+  try {
+    const response = await fetch("https://your-server-endpoint.com/exchange-code", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ code }),
+    });
+
+    const data = await response.json();
+    if (data.access_token) {
+      accessToken = data.access_token;
+      octokit = new Octokit({ auth: accessToken });
+      checkOrCreateRepo();
+    } else {
+      console.error("Failed to retrieve access token:", data);
+    }
+  } catch (error) {
+    console.error("Error retrieving access token:", error);
+  }
+}
     
     async function checkOrCreateRepo() {
   try {
@@ -479,6 +500,8 @@
       window.closeStudyConfirmationModal = closeStudyConfirmationModal;
       window.confirmStudy = confirmStudy;
       window.signInWithGitHub = signInWithGitHub;
+      window.getAccessTokenFromCode = getAccessTokenFromCode;
+
     
       // Check if redirected back from GitHub with a code
       const urlParams = new URLSearchParams(window.location.search);
