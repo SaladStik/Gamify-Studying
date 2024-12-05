@@ -235,18 +235,156 @@
 
     <audio id="completionSound" src="./clock-ticking-83775.mp3"></audio>
 
-    <script>
+    <script type="module">
+      import { Octokit } from "https://esm.sh/octokit";
+    
+      const clientId = 'Ov23li7vmU5ZsXwDdQ74';
+      let deviceCode = '';
+      let accessToken = '';
       let xp = 0;
       let level = 1;
       const xpPerLevel = 100;
       const xpPerSecond = 0.1667;
       let interval;
-
+      let octokit;
+    
+      async function signInWithGitHub() {
+        const response = await fetch('https://github.com/login/device/code', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Accept: 'application/json',
+          },
+          body: JSON.stringify({
+            client_id: clientId,
+            scope: 'repo',
+          }),
+        });
+        const data = await response.json();
+        deviceCode = data.device_code;
+        alert(`Please visit ${data.verification_uri} and enter the code: ${data.user_code}`);
+        pollForAccessToken();
+      }
+    
+      async function pollForAccessToken() {
+        const pollInterval = setInterval(async () => {
+          const response = await fetch('https://github.com/login/oauth/access_token', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              Accept: 'application/json',
+            },
+            body: JSON.stringify({
+              client_id: clientId,
+              device_code: deviceCode,
+              grant_type: 'urn:ietf:params:oauth:grant-type:device_code',
+            }),
+          });
+          const data = await response.json();
+          if (data.access_token) {
+            clearInterval(pollInterval);
+            accessToken = data.access_token;
+            octokit = new Octokit({ auth: accessToken });
+            checkOrCreateRepo();
+          }
+        }, 5000);
+      }
+    
+      async function checkOrCreateRepo() {
+        if (!accessToken) {
+          console.error("Access token is missing.");
+          return;
+        }
+    
+        try {
+          const user = await octokit.users.getAuthenticated();
+          const username = user.data.login;
+    
+          await octokit.repos.get({
+            owner: username,
+            repo: "study-data",
+          });
+    
+          loadUserData(username);
+        } catch (error) {
+          if (error.status === 404) {
+            await octokit.repos.createForAuthenticatedUser({
+              name: "study-data",
+              auto_init: true,
+              private: true,
+            });
+            saveUserData({ xp: 0, level: 1 });
+          } else {
+            console.error("Error checking or creating repository:", error);
+          }
+        }
+      }
+    
+      async function loadUserData(username) {
+        try {
+          const { data } = await octokit.repos.getContent({
+            owner: username,
+            repo: 'study-data',
+            path: 'data.json',
+          });
+          const content = atob(data.content);
+          const userData = JSON.parse(content);
+          xp = userData.xp;
+          level = userData.level;
+          updateUI();
+        } catch (error) {
+          if (error.status === 404) {
+            saveUserData({ xp: 0, level: 1 });
+          }
+        }
+      }
+    
+      async function saveUserData(data) {
+        const user = await octokit.users.getAuthenticated();
+        const username = user.data.login;
+        const content = btoa(JSON.stringify(data));
+        await octokit.repos.createOrUpdateFileContents({
+          owner: username,
+          repo: 'study-data',
+          path: 'data.json',
+          message: 'Update user data',
+          content: content,
+        });
+      }
+    
+      function updateUI() {
+        document.getElementById('xpBar').style.width = `${(xp / xpPerLevel) * 100}%`;
+        document.getElementById('xpText').textContent = `XP: ${Math.floor(xp)} / ${xpPerLevel}`;
+        document.getElementById('levelText').textContent = `Level: ${level}`;
+      }
+    
+      function startTimer() {
+        const timeSelect = document.getElementById("timeSelect");
+        const countdown = document.getElementById("countdown");
+        let time = parseInt(timeSelect.value);
+    
+        clearInterval(interval);
+    
+        interval = setInterval(() => {
+          const minutes = Math.floor(time / 60);
+          const seconds = time % 60;
+          countdown.textContent = `${minutes}m ${seconds}s`;
+    
+          if (time <= 0) {
+            clearInterval(interval);
+            countdown.textContent = "Time's up!";
+            playCompletionSound();
+            openStudyConfirmationModal();
+          }
+          time--;
+        }, 1000);
+      }
+    
       function playCompletionSound() {
         const completionSound = document.getElementById("completionSound");
         completionSound.play();
       }
-
+    
       function showConfetti() {
         const confettiModal = document.getElementById("confettiModal");
         confettiModal.style.display = "flex";
@@ -254,13 +392,13 @@
           confettiModal.style.display = "none";
         }, 500);
       }
-
+    
       function animateXPBar(gainedXP) {
         const xpBar = document.getElementById("xpBar");
         const xpText = document.getElementById("xpText");
         const levelText = document.getElementById("levelText");
-
-        const interval = setInterval(() => {
+    
+        const xpInterval = setInterval(() => {
           if (gainedXP > 0) {
             xp++;
             if (xp >= xpPerLevel) {
@@ -273,196 +411,57 @@
             levelText.textContent = `Level: ${level}`;
             gainedXP--;
           } else {
-            clearInterval(interval);
-            saveUserData();
+            clearInterval(xpInterval);
+            saveUserData({ xp, level });
           }
         }, 50);
       }
-
-      function startTimer() {
-        const timeSelect = document.getElementById("timeSelect");
-        const countdown = document.getElementById("countdown");
-        let time = parseInt(timeSelect.value);
-
-        clearInterval(interval);
-
-        interval = setInterval(() => {
-            const minutes = Math.floor(time / 60);
-            const seconds = time % 60;
-            countdown.textContent = `${minutes}m ${seconds}s`;
-
-            if (time <= 0) {
-            clearInterval(interval);
-            countdown.textContent = "Time's up!";
-            playCompletionSound();
-            openStudyConfirmationModal();
-            }
-            time--;
-        }, 1000);
-        }
-
-        function openStudyConfirmationModal() {
-        document.getElementById("studyConfirmationModal").style.display = "flex";
-        }
-
-        function closeStudyConfirmationModal() {
-        document.getElementById("studyConfirmationModal").style.display = "none";
-        }
-
-        function confirmStudy(didStudy) {
-        closeStudyConfirmationModal();
-        if (didStudy) {
-            const timeSelect = document.getElementById("timeSelect");
-            const totalSessionTime = parseInt(timeSelect.value);
-            const gainedXP = totalSessionTime * xpPerSecond;
-            animateXPBar(gainedXP);
-        }
-        }
-
+    
       function openGrantXpModal() {
         document.getElementById("grantXpModal").style.display = "flex";
       }
-
+    
       function closeGrantXpModal() {
         document.getElementById("grantXpModal").style.display = "none";
       }
-
+    
       function grantMissedXp() {
         const timeSelect = document.getElementById("grantXpTimeSelect");
         const missedTime = parseInt(timeSelect.value);
         const gainedXP = missedTime * xpPerSecond;
-
+    
         animateXPBar(gainedXP);
         closeGrantXpModal();
       }
+    
+      function openStudyConfirmationModal() {
+        document.getElementById("studyConfirmationModal").style.display = "flex";
+      }
+    
+      function closeStudyConfirmationModal() {
+        document.getElementById("studyConfirmationModal").style.display = "none";
+      }
+    
+      function confirmStudy(didStudy) {
+        closeStudyConfirmationModal();
+        if (didStudy) {
+          const timeSelect = document.getElementById("timeSelect");
+          const totalSessionTime = parseInt(timeSelect.value);
+          const gainedXP = totalSessionTime * xpPerSecond;
+          animateXPBar(gainedXP);
+        }
+      }
+
+      // Expose functions to the global scope
+      window.startTimer = startTimer;
+      window.openGrantXpModal = openGrantXpModal;
+      window.closeGrantXpModal = closeGrantXpModal;
+      window.grantMissedXp = grantMissedXp;
+      window.openStudyConfirmationModal = openStudyConfirmationModal;
+      window.closeStudyConfirmationModal = closeStudyConfirmationModal;
+      window.confirmStudy = confirmStudy;
+      window.signInWithGitHub = signInWithGitHub;
     </script>
+    
   </body>
 </html>
-<script src="https://cdn.jsdelivr.net/npm/@octokit/rest"></script>
-<script>
-  const clientId = 'Ov23li7vmU5ZsXwDdQ74';
-  const clientSecret = 'f6ed4ea91d28655a66800cf34a0d7f86a1a3ad66';
-  let accessToken = '';
-
-  async function signInWithGitHub() {
-    const authWindow = window.open(
-      `https://github.com/login/oauth/authorize?client_id=${clientId}&scope=repo`,
-      '_blank',
-      'width=500,height=600'
-    );
-
-    const interval = setInterval(() => {
-      try {
-        if (authWindow.location.href.includes('code')) {
-          clearInterval(interval);
-          const urlParams = new URLSearchParams(authWindow.location.search);
-          const code = urlParams.get('code');
-          authWindow.close();
-          getAccessToken(code);
-        }
-      } catch (error) {}
-    }, 1000);
-  }
-
-  async function getAccessToken(code) {
-    const response = await fetch('https://github.com/login/oauth/access_token', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Accept: 'application/json',
-      },
-      body: JSON.stringify({
-        client_id: clientId,
-        client_secret: clientSecret,
-        code: code,
-      }),
-    });
-    const data = await response.json();
-    accessToken = data.access_token;
-    checkOrCreateRepo();
-  }
-
-  async function checkOrCreateRepo() {
-    const octokit = new Octokit({ auth: accessToken });
-    try {
-      const user = await octokit.users.getAuthenticated();
-      const username = user.data.login;
-      await octokit.repos.get({ owner: username, repo: 'study-data' });
-      loadUserData();
-    } catch (error) {
-      if (error.status === 404) {
-        await octokit.repos.createForAuthenticatedUser({
-          name: 'study-data',
-          auto_init: true,
-        });
-        saveUserData();
-      }
-    }
-  }
-
-  async function loadUserData() {
-    const octokit = new Octokit({ auth: accessToken });
-    const user = await octokit.users.getAuthenticated();
-    const username = user.data.login;
-    try {
-      const { data } = await octokit.repos.getContent({
-        owner: username,
-        repo: 'study-data',
-        path: 'data.json',
-      });
-      const content = atob(data.content);
-      const userData = JSON.parse(content);
-      xp = userData.xp;
-      level = userData.level;
-      updateUI();
-    } catch (error) {
-      if (error.status === 404) {
-        saveUserData();
-      }
-    }
-  }
-
-  async function saveUserData() {
-    const octokit = new Octokit({ auth: accessToken });
-    const user = await octokit.users.getAuthenticated();
-    const username = user.data.login;
-    const content = btoa(JSON.stringify({ xp, level }));
-    await octokit.repos.createOrUpdateFileContents({
-      owner: username,
-      repo: 'study-data',
-      path: 'data.json',
-      message: 'Update user data',
-      content: content,
-    });
-  }
-
-  function updateUI() {
-    document.getElementById('xpBar').style.width = `${(xp / xpPerLevel) * 100}%`;
-    document.getElementById('xpText').textContent = `XP: ${Math.floor(xp)} / ${xpPerLevel}`;
-    document.getElementById('levelText').textContent = `Level: ${level}`;
-  }
-
-  function animateXPBar(gainedXP) {
-    const xpBar = document.getElementById("xpBar");
-    const xpText = document.getElementById("xpText");
-    const levelText = document.getElementById("levelText");
-
-    const interval = setInterval(() => {
-      if (gainedXP > 0) {
-        xp++;
-        if (xp >= xpPerLevel) {
-          xp -= xpPerLevel;
-          level++;
-          showConfetti();
-        }
-        xpBar.style.width = `${(xp / xpPerLevel) * 100}%`;
-        xpText.textContent = `XP: ${Math.floor(xp)} / ${xpPerLevel}`;
-        levelText.textContent = `Level: ${level}`;
-        gainedXP--;
-      } else {
-        clearInterval(interval);
-        saveUserData();
-      }
-    }, 50);
-  }
-</script>
