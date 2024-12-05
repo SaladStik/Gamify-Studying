@@ -5,17 +5,17 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Studying Gamified</title>
     <style>
-      body {
-        background-color: #121212;
-        color: #ffffff;
-        font-family: Arial, sans-serif;
-        display: flex;
-        flex-direction: column;
-        align-items: center;
-        justify-content: center;
-        height: 100vh;
-        margin: 0;
-        overflow: hidden;
+      /* Your existing styles */
+    </style>
+  </head>
+  <body>
+    <button id="githubSignIn" onclick="signInWithGitHub()">
+      Sign in with GitHub
+    </button>
+
+    <h1>Studying Gamified</h1>
+
+    <div id="controls">
       }
 
       #githubSignIn {
@@ -274,6 +274,7 @@
             gainedXP--;
           } else {
             clearInterval(interval);
+            saveUserData();
           }
         }, 50);
       }
@@ -337,3 +338,131 @@
     </script>
   </body>
 </html>
+<script src="https://cdn.jsdelivr.net/npm/@octokit/rest"></script>
+<script>
+  const clientId = 'Ov23li7vmU5ZsXwDdQ74';
+  const clientSecret = 'f6ed4ea91d28655a66800cf34a0d7f86a1a3ad66';
+  let accessToken = '';
+
+  async function signInWithGitHub() {
+    const authWindow = window.open(
+      `https://github.com/login/oauth/authorize?client_id=${clientId}&scope=repo`,
+      '_blank',
+      'width=500,height=600'
+    );
+
+    const interval = setInterval(() => {
+      try {
+        if (authWindow.location.href.includes('code')) {
+          clearInterval(interval);
+          const urlParams = new URLSearchParams(authWindow.location.search);
+          const code = urlParams.get('code');
+          authWindow.close();
+          getAccessToken(code);
+        }
+      } catch (error) {}
+    }, 1000);
+  }
+
+  async function getAccessToken(code) {
+    const response = await fetch('https://github.com/login/oauth/access_token', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Accept: 'application/json',
+      },
+      body: JSON.stringify({
+        client_id: clientId,
+        client_secret: clientSecret,
+        code: code,
+      }),
+    });
+    const data = await response.json();
+    accessToken = data.access_token;
+    checkOrCreateRepo();
+  }
+
+  async function checkOrCreateRepo() {
+    const octokit = new Octokit({ auth: accessToken });
+    try {
+      const user = await octokit.users.getAuthenticated();
+      const username = user.data.login;
+      await octokit.repos.get({ owner: username, repo: 'study-data' });
+      loadUserData();
+    } catch (error) {
+      if (error.status === 404) {
+        await octokit.repos.createForAuthenticatedUser({
+          name: 'study-data',
+          auto_init: true,
+        });
+        saveUserData();
+      }
+    }
+  }
+
+  async function loadUserData() {
+    const octokit = new Octokit({ auth: accessToken });
+    const user = await octokit.users.getAuthenticated();
+    const username = user.data.login;
+    try {
+      const { data } = await octokit.repos.getContent({
+        owner: username,
+        repo: 'study-data',
+        path: 'data.json',
+      });
+      const content = atob(data.content);
+      const userData = JSON.parse(content);
+      xp = userData.xp;
+      level = userData.level;
+      updateUI();
+    } catch (error) {
+      if (error.status === 404) {
+        saveUserData();
+      }
+    }
+  }
+
+  async function saveUserData() {
+    const octokit = new Octokit({ auth: accessToken });
+    const user = await octokit.users.getAuthenticated();
+    const username = user.data.login;
+    const content = btoa(JSON.stringify({ xp, level }));
+    await octokit.repos.createOrUpdateFileContents({
+      owner: username,
+      repo: 'study-data',
+      path: 'data.json',
+      message: 'Update user data',
+      content: content,
+    });
+  }
+
+  function updateUI() {
+    document.getElementById('xpBar').style.width = `${(xp / xpPerLevel) * 100}%`;
+    document.getElementById('xpText').textContent = `XP: ${Math.floor(xp)} / ${xpPerLevel}`;
+    document.getElementById('levelText').textContent = `Level: ${level}`;
+  }
+
+  function animateXPBar(gainedXP) {
+    const xpBar = document.getElementById("xpBar");
+    const xpText = document.getElementById("xpText");
+    const levelText = document.getElementById("levelText");
+
+    const interval = setInterval(() => {
+      if (gainedXP > 0) {
+        xp++;
+        if (xp >= xpPerLevel) {
+          xp -= xpPerLevel;
+          level++;
+          showConfetti();
+        }
+        xpBar.style.width = `${(xp / xpPerLevel) * 100}%`;
+        xpText.textContent = `XP: ${Math.floor(xp)} / ${xpPerLevel}`;
+        levelText.textContent = `Level: ${level}`;
+        gainedXP--;
+      } else {
+        clearInterval(interval);
+        saveUserData();
+      }
+    }, 50);
+  }
+</script>
